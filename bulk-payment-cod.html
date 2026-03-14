@@ -1,0 +1,687 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Bulk Payment</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0c0c0d;
+    --bg-card: #161618;
+    --bg-input: #1e1e21;
+    --border: #2a2a2e;
+    --text: #f5f5f5;
+    --text-dim: #8b8b8f;
+    --accent: #f43f5e;
+    --success: #22c55e;
+    --success-glow: rgba(34,197,94,0.12);
+    --error: #ef4444;
+    --error-glow: rgba(239,68,68,0.12);
+    --gold: #f59e0b;
+    --gold-glow: rgba(245,158,11,0.12);
+    --blue: #3b82f6;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'IBM Plex Sans Arabic', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 1rem;
+  }
+
+  .container { max-width: 580px; margin: 0 auto; }
+
+  .header { text-align: center; margin-bottom: 1.5rem; padding-top: 0.5rem; }
+  .header h1 { font-size: 1.4rem; font-weight: 700; margin-bottom: 0.3rem; }
+  .header p { color: var(--text-dim); font-size: 0.85rem; }
+
+  .card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1rem;
+    margin-bottom: 1rem;
+  }
+
+  .card-title {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--text-dim);
+    margin-bottom: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  textarea {
+    width: 100%;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 0.85rem 1rem;
+    color: var(--text);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.95rem;
+    outline: none;
+    resize: vertical;
+    min-height: 120px;
+    transition: border-color 0.2s;
+    direction: ltr;
+    line-height: 1.7;
+  }
+
+  textarea:focus { border-color: var(--accent); }
+  textarea::placeholder { color: var(--text-dim); font-size: 0.85rem; font-family: 'JetBrains Mono', monospace; }
+
+  .textarea-hint {
+    font-size: 0.75rem;
+    color: var(--text-dim);
+    margin-top: 0.4rem;
+    text-align: left;
+    direction: ltr;
+  }
+
+  /* Stats bar */
+  .stats-bar {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+    display: none;
+  }
+  .stats-bar.visible { display: flex; }
+
+  .stat-chip {
+    flex: 1;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 0.65rem 0.75rem;
+    text-align: center;
+  }
+  .stat-chip .stat-val {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 1.1rem;
+    font-weight: 700;
+    display: block;
+  }
+  .stat-chip .stat-lbl {
+    font-size: 0.72rem;
+    color: var(--text-dim);
+    display: block;
+    margin-top: 0.1rem;
+  }
+  .stat-chip.gold .stat-val { color: var(--gold); }
+  .stat-chip.blue .stat-val { color: var(--blue); }
+  .stat-chip.green .stat-val { color: var(--success); }
+
+  /* Buttons row */
+  .btn-row {
+    display: flex;
+    gap: 0.6rem;
+    margin-bottom: 1rem;
+  }
+
+  .btn {
+    flex: 1;
+    padding: 0.85rem;
+    border-radius: 10px;
+    font-family: inherit;
+    font-size: 0.9rem;
+    font-weight: 700;
+    cursor: pointer;
+    border: none;
+    transition: all 0.2s;
+  }
+
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .btn-preview {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    color: var(--text);
+  }
+  .btn-preview:hover:not(:disabled) { border-color: var(--blue); color: var(--blue); }
+
+  .btn-pay {
+    background: var(--gold);
+    color: #000;
+  }
+  .btn-pay:hover:not(:disabled) { filter: brightness(1.1); }
+
+  /* Orders table */
+  .orders-table-wrap {
+    display: none;
+    margin-bottom: 1rem;
+    border-radius: 12px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+  }
+  .orders-table-wrap.visible { display: block; }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+  }
+
+  thead {
+    background: var(--bg-input);
+  }
+
+  thead th {
+    padding: 0.65rem 0.85rem;
+    text-align: right;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    border-bottom: 1px solid var(--border);
+  }
+
+  thead th:last-child { text-align: left; }
+
+  tbody tr {
+    border-bottom: 1px solid var(--border);
+    transition: background 0.15s;
+  }
+  tbody tr:last-child { border-bottom: none; }
+  tbody tr:hover { background: rgba(255,255,255,0.02); }
+
+  tbody td {
+    padding: 0.65rem 0.85rem;
+    vertical-align: middle;
+  }
+
+  .order-num-cell {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 600;
+    color: var(--accent);
+    font-size: 0.9rem;
+  }
+
+  .amount-cell {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 700;
+    color: var(--gold);
+    font-size: 0.9rem;
+    text-align: left;
+  }
+
+  .status-cell { text-align: center; }
+
+  .badge {
+    display: inline-block;
+    padding: 0.2rem 0.55rem;
+    border-radius: 6px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
+  .badge-loading {
+    background: rgba(59,130,246,0.15);
+    color: var(--blue);
+    border: 1px solid rgba(59,130,246,0.3);
+  }
+
+  .badge-ready {
+    background: rgba(245,158,11,0.12);
+    color: var(--gold);
+    border: 1px solid rgba(245,158,11,0.25);
+  }
+
+  .badge-paid {
+    background: var(--success-glow);
+    color: var(--success);
+    border: 1px solid rgba(34,197,94,0.3);
+  }
+
+  .badge-error {
+    background: var(--error-glow);
+    color: var(--error);
+    border: 1px solid rgba(239,68,68,0.3);
+  }
+
+  .badge-notfound {
+    background: rgba(139,139,143,0.12);
+    color: var(--text-dim);
+    border: 1px solid rgba(139,139,143,0.25);
+  }
+
+  .badge-skipped {
+    background: rgba(139,139,143,0.12);
+    color: var(--text-dim);
+    border: 1px solid rgba(139,139,143,0.25);
+  }
+
+  /* Summary result */
+  .result-box {
+    border-radius: 10px;
+    padding: 0.9rem 1rem;
+    margin-bottom: 0.75rem;
+    display: none;
+    font-size: 0.9rem;
+  }
+
+  .result-box.success {
+    display: block;
+    background: var(--success-glow);
+    border: 1px solid rgba(34,197,94,0.3);
+    color: var(--success);
+  }
+
+  .result-box.error {
+    display: block;
+    background: var(--error-glow);
+    border: 1px solid rgba(239,68,68,0.3);
+    color: var(--error);
+  }
+
+  .result-box .result-title { font-weight: 700; font-size: 0.95rem; margin-bottom: 0.2rem; }
+  .result-box .result-detail { font-size: 0.8rem; opacity: 0.8; font-family: 'JetBrains Mono', monospace; }
+
+  /* Settings */
+  .settings-toggle {
+    width: 100%;
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    padding: 0.6rem;
+    border-radius: 8px;
+    font-family: inherit;
+    font-size: 0.85rem;
+    cursor: pointer;
+    margin-bottom: 0.75rem;
+    transition: border-color 0.2s;
+  }
+  .settings-toggle:hover { border-color: var(--text-dim); }
+
+  .settings-content { display: none; margin-bottom: 0.75rem; }
+  .settings-content.active { display: block; }
+
+  .input-group { margin-bottom: 0.75rem; }
+  .input-group:last-child { margin-bottom: 0; }
+  .input-group label { display: block; font-size: 0.8rem; color: var(--text-dim); margin-bottom: 0.35rem; }
+  .input-group input {
+    width: 100%;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 0.75rem 1rem;
+    color: var(--text);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.85rem;
+    outline: none;
+    transition: border-color 0.2s;
+    direction: ltr;
+  }
+  .input-group input:focus { border-color: var(--accent); }
+
+  .spinner {
+    width: 14px; height: 14px;
+    border: 2px solid transparent;
+    border-top-color: currentColor;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    display: inline-block;
+    vertical-align: middle;
+    margin-right: 0.3rem;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .progress-bar-wrap {
+    height: 3px;
+    background: var(--border);
+    border-radius: 2px;
+    margin-bottom: 1rem;
+    display: none;
+    overflow: hidden;
+  }
+  .progress-bar-wrap.visible { display: block; }
+  .progress-bar {
+    height: 100%;
+    background: var(--gold);
+    border-radius: 2px;
+    transition: width 0.3s ease;
+    width: 0%;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <header class="header">
+    <h1>📦 Bulk Payment</h1>
+    <p>عرض وتسجيل دفع لأوردرات متعددة دفعة واحدة</p>
+  </header>
+
+  <!-- Input card -->
+  <div class="card">
+    <div class="card-title">أرقام الأوردرات</div>
+    <textarea
+      id="ordersInput"
+      placeholder="#32109&#10;#32110&#10;#32111"
+      oninput="handleInput()"
+      spellcheck="false"
+    ></textarea>
+    <div class="textarea-hint">كل سطر رقم أوردر — مع أو بدون #</div>
+  </div>
+
+  <!-- Stats -->
+  <div class="stats-bar" id="statsBar">
+    <div class="stat-chip blue">
+      <span class="stat-val" id="statCount">0</span>
+      <span class="stat-lbl">أوردر</span>
+    </div>
+    <div class="stat-chip gold">
+      <span class="stat-val" id="statTotal">—</span>
+      <span class="stat-lbl">إجمالي EGP</span>
+    </div>
+    <div class="stat-chip green">
+      <span class="stat-val" id="statPaid">0</span>
+      <span class="stat-lbl">تم الدفع</span>
+    </div>
+  </div>
+
+  <!-- Action buttons -->
+  <div class="btn-row">
+    <button class="btn btn-preview" id="previewBtn" onclick="fetchPreviews()" disabled>
+      🔍 عرض التوتالات
+    </button>
+    <button class="btn btn-pay" id="payBtn" onclick="confirmBulkPay()" disabled>
+      💵 Mark all as Paid
+    </button>
+  </div>
+
+  <!-- Progress bar -->
+  <div class="progress-bar-wrap" id="progressWrap">
+    <div class="progress-bar" id="progressBar"></div>
+  </div>
+
+  <!-- Result summary -->
+  <div class="result-box" id="resultBox">
+    <div class="result-title" id="resultTitle"></div>
+    <div class="result-detail" id="resultDetail"></div>
+  </div>
+
+  <!-- Orders table -->
+  <div class="orders-table-wrap" id="tableWrap">
+    <table>
+      <thead>
+        <tr>
+          <th>الأوردر</th>
+          <th>المبلغ</th>
+          <th style="text-align:center">الحالة</th>
+        </tr>
+      </thead>
+      <tbody id="tableBody"></tbody>
+    </table>
+  </div>
+
+  <!-- Settings -->
+  <button class="settings-toggle" onclick="toggleSettings()">⚙️ الإعدادات</button>
+  <div class="settings-content" id="settings">
+    <div class="card">
+      <div class="input-group">
+        <label>Worker URL</label>
+        <input type="text" id="workerUrl" placeholder="https://your-worker.workers.dev/bulk-payment">
+      </div>
+      <div class="input-group">
+        <label>Worker Secret</label>
+        <input type="password" id="workerSecret" placeholder="WORKER_SECRET">
+      </div>
+    </div>
+  </div>
+
+</div>
+<script>
+  // ── Settings persistence ──────────────────────────────────────────
+  document.getElementById('workerUrl').value    = localStorage.getItem('bulk_worker_url')    || '';
+  document.getElementById('workerSecret').value = localStorage.getItem('bulk_worker_secret') || '';
+  document.getElementById('workerUrl').addEventListener('change',    e => localStorage.setItem('bulk_worker_url',    e.target.value));
+  document.getElementById('workerSecret').addEventListener('change', e => localStorage.setItem('bulk_worker_secret', e.target.value));
+
+  // ── State ─────────────────────────────────────────────────────────
+  let orders = [];      // [{ num, id, amount, canMarkAsPaid, skipReason, status, error }]
+  let previewed = false;
+
+  // ── Parse textarea ────────────────────────────────────────────────
+  function parseOrderNumbers() {
+    const raw = document.getElementById('ordersInput').value;
+    return [...new Set(
+      raw.split('\n')
+        .map(l => l.trim().replace(/^#/, ''))
+        .filter(l => /^\d+$/.test(l))
+    )];
+  }
+
+  function handleInput() {
+    const nums = parseOrderNumbers();
+    const count = nums.length;
+    const statsBar = document.getElementById('statsBar');
+
+    if (count > 0) {
+      statsBar.classList.add('visible');
+      document.getElementById('statCount').textContent = count;
+      document.getElementById('statTotal').textContent = '—';
+      document.getElementById('statPaid').textContent  = '0';
+    } else {
+      statsBar.classList.remove('visible');
+    }
+
+    document.getElementById('previewBtn').disabled = count === 0;
+    document.getElementById('payBtn').disabled     = true;
+    previewed = false;
+    hideResult();
+    // reset table
+    document.getElementById('tableWrap').classList.remove('visible');
+    document.getElementById('tableBody').innerHTML = '';
+  }
+
+  // ── Fetch previews ────────────────────────────────────────────────
+  async function fetchPreviews() {
+    const nums = parseOrderNumbers();
+    if (!nums.length) return;
+
+    const workerUrl    = document.getElementById('workerUrl').value.trim();
+    const workerSecret = document.getElementById('workerSecret').value.trim();
+    if (!workerUrl || !workerSecret) {
+      document.getElementById('settings').classList.add('active');
+      showResult(false, 'أدخل Worker URL و Worker Secret', '');
+      return;
+    }
+
+    // Init orders state
+    orders = nums.map(n => ({ num: n, id: null, amount: null, canMarkAsPaid: null, skipReason: null, status: 'loading', error: null }));
+
+    renderTable();
+    document.getElementById('tableWrap').classList.add('visible');
+    document.getElementById('previewBtn').disabled = true;
+    document.getElementById('payBtn').disabled     = true;
+    setProgress(0);
+    hideResult();
+
+    // Fetch each order
+    let done = 0;
+    for (const order of orders) {
+      try {
+        const res  = await fetch(workerUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${workerSecret}` },
+          body: JSON.stringify({ action: 'preview', orderNumber: `#${order.num}` }),
+        });
+        const data = await res.json();
+
+        if (data.success) {
+          order.id           = data.orderId;
+          order.amount       = parseFloat(data.amount);
+          order.canMarkAsPaid = data.canMarkAsPaid;
+          order.skipReason   = data.skipReason || null;
+          order.status       = data.canMarkAsPaid ? 'ready' : 'skipped';
+        } else if (data.notFound) {
+          order.status = 'notfound';
+          order.error  = 'غير موجود';
+        } else {
+          order.status = 'error';
+          order.error  = data.error || 'خطأ';
+        }
+      } catch (e) {
+        order.status = 'error';
+        order.error  = 'خطأ في الاتصال';
+      }
+
+      done++;
+      setProgress(done / orders.length * 100);
+      updateStats();
+      renderTable();
+    }
+
+    setProgress(100);
+    document.getElementById('previewBtn').disabled = false;
+
+    const readyOrders = orders.filter(o => o.status === 'ready');
+    if (readyOrders.length > 0) {
+      document.getElementById('payBtn').disabled = false;
+      previewed = true;
+    } else {
+      showResult(false, 'مفيش أوردرات صالحة للدفع', 'كل الأوردرات مدفوعة أو لا تنطبق عليها الأداة');
+    }
+  }
+
+  // ── Bulk pay ──────────────────────────────────────────────────────
+  async function confirmBulkPay() {
+    const readyOrders = orders.filter(o => o.status === 'ready');
+    if (!readyOrders.length) return;
+
+    const total = readyOrders.reduce((s, o) => s + o.amount, 0);
+    const msg   = `هتعمل Mark as Paid لـ ${readyOrders.length} أوردر\nإجمالي: ${total.toLocaleString('ar-EG')} ج.م\n\nمتأكد؟`;
+    if (!confirm(msg)) return;
+
+    await runBulkPay(readyOrders);
+  }
+
+  async function runBulkPay(readyOrders) {
+    const workerUrl    = document.getElementById('workerUrl').value.trim();
+    const workerSecret = document.getElementById('workerSecret').value.trim();
+
+    document.getElementById('payBtn').disabled     = true;
+    document.getElementById('previewBtn').disabled = true;
+    setProgress(0);
+    hideResult();
+
+    let successCount = 0, failCount = 0;
+    let done = 0;
+
+    for (const order of readyOrders) {
+      order.status = 'loading';
+      renderTable();
+
+      try {
+        const res  = await fetch(workerUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${workerSecret}` },
+          body: JSON.stringify({ action: 'pay', orderNumber: `#${order.num}`, orderId: order.id, amount: order.amount.toFixed(2) }),
+        });
+        const data = await res.json();
+
+        if (data.success) {
+          order.status = 'paid';
+          successCount++;
+        } else {
+          order.status = 'error';
+          order.error  = data.error || 'فشل';
+          failCount++;
+        }
+      } catch (e) {
+        order.status = 'error';
+        order.error  = 'خطأ في الاتصال';
+        failCount++;
+      }
+
+      done++;
+      setProgress(done / readyOrders.length * 100);
+      updateStats();
+      renderTable();
+    }
+
+    document.getElementById('previewBtn').disabled = false;
+
+    if (successCount > 0 && failCount === 0) {
+      showResult(true,
+        `✅ تم الدفع بنجاح لـ ${successCount} أوردر`,
+        `إجمالي: ${orders.filter(o=>o.status==='paid').reduce((s,o)=>s+o.amount,0).toLocaleString('ar-EG')} ج.م`
+      );
+    } else if (successCount > 0) {
+      showResult(true,
+        `✅ ${successCount} نجح  ⚠️ ${failCount} فشل`,
+        'راجع الجدول للتفاصيل'
+      );
+    } else {
+      showResult(false, `فشل الدفع لكل الأوردرات`, 'راجع الجدول للتفاصيل');
+    }
+  }
+
+  // ── Render helpers ────────────────────────────────────────────────
+  function renderTable() {
+    const tbody = document.getElementById('tableBody');
+    tbody.innerHTML = orders.map(o => {
+      // Amount cell — show outstanding for ready/skipped, dash for loading/notfound/error
+      let amountCell = '—';
+      if (o.amount != null) {
+        const color = o.status === 'skipped' ? 'var(--text-dim)' : 'var(--gold)';
+        amountCell = `<span style="font-family:'JetBrains Mono',monospace;font-weight:700;color:${color}">${o.amount.toLocaleString('ar-EG')} ج.م</span>`;
+      }
+
+      let badge;
+      if      (o.status === 'loading')  badge = `<span class="badge badge-loading"><span class="spinner"></span>جاري...</span>`;
+      else if (o.status === 'ready')    badge = `<span class="badge badge-ready">جاهز</span>`;
+      else if (o.status === 'paid')     badge = `<span class="badge badge-paid">✓ تم الدفع</span>`;
+      else if (o.status === 'skipped')  badge = `<span class="badge badge-skipped" title="${o.skipReason||''}">${o.skipReason || 'مُتخطى'}</span>`;
+      else if (o.status === 'notfound') badge = `<span class="badge badge-notfound">غير موجود</span>`;
+      else                              badge = `<span class="badge badge-error" title="${o.error||''}">خطأ</span>`;
+
+      return `<tr>
+        <td class="order-num-cell">#${o.num}</td>
+        <td class="amount-cell">${amountCell}</td>
+        <td class="status-cell">${badge}</td>
+      </tr>`;
+    }).join('');
+  }
+
+  function updateStats() {
+    const ready  = orders.filter(o => o.status === 'ready');
+    const paid   = orders.filter(o => o.status === 'paid');
+    const total  = [...ready, ...paid].reduce((s, o) => s + (o.amount || 0), 0);
+    document.getElementById('statTotal').textContent = total > 0 ? total.toLocaleString('ar-EG') : '—';
+    document.getElementById('statPaid').textContent  = paid.length;
+  }
+
+  function setProgress(pct) {
+    const wrap = document.getElementById('progressWrap');
+    const bar  = document.getElementById('progressBar');
+    wrap.classList.add('visible');
+    bar.style.width = pct + '%';
+    if (pct >= 100) setTimeout(() => wrap.classList.remove('visible'), 800);
+  }
+
+  function showResult(success, title, detail) {
+    const box = document.getElementById('resultBox');
+    box.className = `result-box ${success ? 'success' : 'error'}`;
+    document.getElementById('resultTitle').textContent  = title;
+    document.getElementById('resultDetail').textContent = detail;
+  }
+
+  function hideResult() {
+    document.getElementById('resultBox').className = 'result-box';
+  }
+
+  function toggleSettings() {
+    document.getElementById('settings').classList.toggle('active');
+  }
+</script>
+</body>
+</html>
