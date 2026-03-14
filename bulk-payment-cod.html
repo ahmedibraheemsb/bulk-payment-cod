@@ -21,6 +21,7 @@
     --gold: #f59e0b;
     --gold-glow: rgba(245,158,11,0.12);
     --blue: #3b82f6;
+    --neutral: #a0a0a8;
   }
 
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -31,9 +32,14 @@
     color: var(--text);
     min-height: 100vh;
     padding: 1rem;
+    /* Force Latin numerals everywhere */
+    font-variant-numeric: normal;
   }
 
-  .container { max-width: 580px; margin: 0 auto; }
+  /* Override Arabic numerals globally */
+  * { font-feature-settings: normal; }
+
+  .container { max-width: 620px; margin: 0 auto; }
 
   .header { text-align: center; margin-bottom: 1.5rem; padding-top: 0.5rem; }
   .header h1 { font-size: 1.4rem; font-weight: 700; margin-bottom: 0.3rem; }
@@ -167,9 +173,7 @@
     font-size: 0.85rem;
   }
 
-  thead {
-    background: var(--bg-input);
-  }
+  thead { background: var(--bg-input); }
 
   thead th {
     padding: 0.65rem 0.85rem;
@@ -182,7 +186,8 @@
     border-bottom: 1px solid var(--border);
   }
 
-  thead th:last-child { text-align: left; }
+  thead th.col-status { text-align: center; }
+  thead th.col-amount { text-align: left; direction: ltr; }
 
   tbody tr {
     border-bottom: 1px solid var(--border);
@@ -191,28 +196,33 @@
   tbody tr:last-child { border-bottom: none; }
   tbody tr:hover { background: rgba(255,255,255,0.02); }
 
-  tbody td {
-    padding: 0.65rem 0.85rem;
-    vertical-align: middle;
-  }
+  tbody td { padding: 0.65rem 0.85rem; vertical-align: middle; }
 
   .order-num-cell {
     font-family: 'JetBrains Mono', monospace;
     font-weight: 600;
-    color: var(--accent);
+    color: var(--neutral);
     font-size: 0.9rem;
+    direction: ltr;
   }
 
   .amount-cell {
     font-family: 'JetBrains Mono', monospace;
     font-weight: 700;
-    color: var(--gold);
     font-size: 0.9rem;
     text-align: left;
+    direction: ltr;
   }
 
   .status-cell { text-align: center; }
+  .financial-cell {
+    font-size: 0.78rem;
+    color: var(--text-dim);
+    font-family: 'JetBrains Mono', monospace;
+    text-align: center;
+  }
 
+  /* Badges */
   .badge {
     display: inline-block;
     padding: 0.2rem 0.55rem;
@@ -234,10 +244,22 @@
     border: 1px solid rgba(245,158,11,0.25);
   }
 
-  .badge-paid {
+  .badge-done {
     background: var(--success-glow);
     color: var(--success);
     border: 1px solid rgba(34,197,94,0.3);
+  }
+
+  .badge-paid-full {
+    background: var(--success-glow);
+    color: var(--success);
+    border: 1px solid rgba(34,197,94,0.3);
+  }
+
+  .badge-refund {
+    background: var(--error-glow);
+    color: var(--error);
+    border: 1px solid rgba(239,68,68,0.3);
   }
 
   .badge-error {
@@ -356,7 +378,7 @@
 
   <header class="header">
     <h1>📦 Bulk Payment</h1>
-    <p>عرض وتسجيل دفع لأوردرات متعددة دفعة واحدة</p>
+    <p>استعلام وتسجيل تحصيل كامل لأوردرات متعددة دفعة واحدة</p>
   </header>
 
   <!-- Input card -->
@@ -383,14 +405,14 @@
     </div>
     <div class="stat-chip green">
       <span class="stat-val" id="statPaid">0</span>
-      <span class="stat-lbl">تم الدفع</span>
+      <span class="stat-lbl">تم التحصيل</span>
     </div>
   </div>
 
   <!-- Action buttons -->
   <div class="btn-row">
     <button class="btn btn-preview" id="previewBtn" onclick="fetchPreviews()" disabled>
-      🔍 عرض التوتالات
+      🔍 استعلام المبلغ الإجمالي
     </button>
     <button class="btn btn-pay" id="payBtn" onclick="confirmBulkPay()" disabled>
       💵 Mark all as Paid
@@ -414,8 +436,9 @@
       <thead>
         <tr>
           <th>الأوردر</th>
-          <th>المبلغ</th>
-          <th style="text-align:center">الحالة</th>
+          <th class="col-amount">المبلغ المستحق</th>
+          <th class="col-status">Payment Status</th>
+          <th class="col-status">الحالة</th>
         </tr>
       </thead>
       <tbody id="tableBody"></tbody>
@@ -446,8 +469,28 @@
   document.getElementById('workerSecret').addEventListener('change', e => localStorage.setItem('bulk_worker_secret', e.target.value));
 
   // ── State ─────────────────────────────────────────────────────────
-  let orders = [];      // [{ num, id, amount, canMarkAsPaid, skipReason, status, error }]
+  let orders = [];   // [{ num, id, amount, canMarkAsPaid, skipReason, financialStatus, status, error }]
   let previewed = false;
+
+  // ── Format numbers always as Latin (English) digits ──────────────
+  function fmt(num) {
+    return Number(num).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+
+  // ── Financial status label mapping ────────────────────────────────
+  function financialLabel(status) {
+    const map = {
+      PAID:            'Paid',
+      PARTIALLY_PAID:  'Partially Paid',
+      PENDING:         'Pending',
+      AUTHORIZED:      'Authorized',
+      PARTIALLY_REFUNDED: 'Partially Refunded',
+      REFUNDED:        'Refunded',
+      VOIDED:          'Voided',
+      EXPIRED:         'Expired',
+    };
+    return map[status] || status || '—';
+  }
 
   // ── Parse textarea ────────────────────────────────────────────────
   function parseOrderNumbers() {
@@ -460,7 +503,7 @@
   }
 
   function handleInput() {
-    const nums = parseOrderNumbers();
+    const nums  = parseOrderNumbers();
     const count = nums.length;
     const statsBar = document.getElementById('statsBar');
 
@@ -477,7 +520,6 @@
     document.getElementById('payBtn').disabled     = true;
     previewed = false;
     hideResult();
-    // reset table
     document.getElementById('tableWrap').classList.remove('visible');
     document.getElementById('tableBody').innerHTML = '';
   }
@@ -495,8 +537,12 @@
       return;
     }
 
-    // Init orders state
-    orders = nums.map(n => ({ num: n, id: null, amount: null, canMarkAsPaid: null, skipReason: null, status: 'loading', error: null }));
+    orders = nums.map(n => ({
+      num: n, id: null, amount: null,
+      canMarkAsPaid: null, skipReason: null,
+      financialStatus: null,
+      status: 'loading', error: null
+    }));
 
     renderTable();
     document.getElementById('tableWrap').classList.add('visible');
@@ -505,7 +551,6 @@
     setProgress(0);
     hideResult();
 
-    // Fetch each order
     let done = 0;
     for (const order of orders) {
       try {
@@ -517,14 +562,14 @@
         const data = await res.json();
 
         if (data.success) {
-          order.id           = data.orderId;
-          order.amount       = parseFloat(data.amount);
-          order.canMarkAsPaid = data.canMarkAsPaid;
-          order.skipReason   = data.skipReason || null;
-          order.status       = data.canMarkAsPaid ? 'ready' : 'skipped';
+          order.id              = data.orderId;
+          order.amount          = parseFloat(data.amount);
+          order.canMarkAsPaid   = data.canMarkAsPaid;
+          order.skipReason      = data.skipReason || null;
+          order.financialStatus = data.financialStatus || null;
+          order.status          = data.canMarkAsPaid ? 'ready' : 'skipped';
         } else if (data.notFound) {
           order.status = 'notfound';
-          order.error  = 'غير موجود';
         } else {
           order.status = 'error';
           order.error  = data.error || 'خطأ';
@@ -548,7 +593,7 @@
       document.getElementById('payBtn').disabled = false;
       previewed = true;
     } else {
-      showResult(false, 'مفيش أوردرات صالحة للدفع', 'كل الأوردرات مدفوعة أو لا تنطبق عليها الأداة');
+      showResult(false, 'مفيش أوردرات صالحة للتحصيل', 'كل الأوردرات مدفوعة أو لا تنطبق عليها الأداة');
     }
   }
 
@@ -558,7 +603,7 @@
     if (!readyOrders.length) return;
 
     const total = readyOrders.reduce((s, o) => s + o.amount, 0);
-    const msg   = `هتعمل Mark as Paid لـ ${readyOrders.length} أوردر\nإجمالي: ${total.toLocaleString('ar-EG')} ج.م\n\nمتأكد؟`;
+    const msg   = `ستقوم بتسجيل التحصيل الكامل لعدد ${readyOrders.length} أوردر\nالإجمالي: ${fmt(total)} EGP\n\nمتأكد؟`;
     if (!confirm(msg)) return;
 
     await runBulkPay(readyOrders);
@@ -573,8 +618,7 @@
     setProgress(0);
     hideResult();
 
-    let successCount = 0, failCount = 0;
-    let done = 0;
+    let successCount = 0, failCount = 0, done = 0;
 
     for (const order of readyOrders) {
       order.status = 'loading';
@@ -589,7 +633,8 @@
         const data = await res.json();
 
         if (data.success) {
-          order.status = 'paid';
+          order.status          = 'done';
+          order.financialStatus = 'PAID';
           successCount++;
         } else {
           order.status = 'error';
@@ -610,10 +655,12 @@
 
     document.getElementById('previewBtn').disabled = false;
 
+    const paidTotal = orders.filter(o => o.status === 'done').reduce((s, o) => s + o.amount, 0);
+
     if (successCount > 0 && failCount === 0) {
       showResult(true,
-        `✅ تم الدفع بنجاح لـ ${successCount} أوردر`,
-        `إجمالي: ${orders.filter(o=>o.status==='paid').reduce((s,o)=>s+o.amount,0).toLocaleString('ar-EG')} ج.م`
+        `✅ تم تسجيل التحصيل بنجاح لـ ${successCount} أوردر`,
+        `الإجمالي: ${fmt(paidTotal)} EGP`
       );
     } else if (successCount > 0) {
       showResult(true,
@@ -621,32 +668,47 @@
         'راجع الجدول للتفاصيل'
       );
     } else {
-      showResult(false, `فشل الدفع لكل الأوردرات`, 'راجع الجدول للتفاصيل');
+      showResult(false, 'فشل التحصيل لكل الأوردرات', 'راجع الجدول للتفاصيل');
     }
   }
 
-  // ── Render helpers ────────────────────────────────────────────────
+  // ── Render table ──────────────────────────────────────────────────
   function renderTable() {
     const tbody = document.getElementById('tableBody');
     tbody.innerHTML = orders.map(o => {
-      // Amount cell — show outstanding for ready/skipped, dash for loading/notfound/error
-      let amountCell = '—';
+
+      // Amount cell
+      let amountCell = '<span style="color:var(--text-dim)">—</span>';
       if (o.amount != null) {
-        const color = o.status === 'skipped' ? 'var(--text-dim)' : 'var(--gold)';
-        amountCell = `<span style="font-family:'JetBrains Mono',monospace;font-weight:700;color:${color}">${o.amount.toLocaleString('ar-EG')} ج.م</span>`;
+        let color = 'var(--gold)';
+        if (o.amount < 0)               color = 'var(--error)';
+        else if (o.status === 'skipped') color = 'var(--text-dim)';
+        amountCell = `<span style="font-family:'JetBrains Mono',monospace;font-weight:700;color:${color}">${fmt(o.amount)} EGP</span>`;
       }
 
+      // Action badge
       let badge;
       if      (o.status === 'loading')  badge = `<span class="badge badge-loading"><span class="spinner"></span>جاري...</span>`;
       else if (o.status === 'ready')    badge = `<span class="badge badge-ready">جاهز</span>`;
-      else if (o.status === 'paid')     badge = `<span class="badge badge-paid">✓ تم الدفع</span>`;
-      else if (o.status === 'skipped')  badge = `<span class="badge badge-skipped" title="${o.skipReason||''}">${o.skipReason || 'مُتخطى'}</span>`;
+      else if (o.status === 'done')     badge = `<span class="badge badge-done">✓ تم التحصيل</span>`;
+      else if (o.status === 'skipped') {
+        if (o.skipReason === 'مدفوع بالكامل')
+          badge = `<span class="badge badge-paid-full">مدفوع بالكامل</span>`;
+        else if (o.skipReason === 'مستحق استرداد')
+          badge = `<span class="badge badge-refund">يستحق الاسترداد</span>`;
+        else
+          badge = `<span class="badge badge-skipped" title="${o.skipReason||''}">${o.skipReason || 'مُتخطى'}</span>`;
+      }
       else if (o.status === 'notfound') badge = `<span class="badge badge-notfound">غير موجود</span>`;
       else                              badge = `<span class="badge badge-error" title="${o.error||''}">خطأ</span>`;
+
+      // Financial status column
+      const finLabel = o.financialStatus ? financialLabel(o.financialStatus) : '—';
 
       return `<tr>
         <td class="order-num-cell">#${o.num}</td>
         <td class="amount-cell">${amountCell}</td>
+        <td class="financial-cell">${finLabel}</td>
         <td class="status-cell">${badge}</td>
       </tr>`;
     }).join('');
@@ -654,10 +716,10 @@
 
   function updateStats() {
     const ready  = orders.filter(o => o.status === 'ready');
-    const paid   = orders.filter(o => o.status === 'paid');
-    const total  = [...ready, ...paid].reduce((s, o) => s + (o.amount || 0), 0);
-    document.getElementById('statTotal').textContent = total > 0 ? total.toLocaleString('ar-EG') : '—';
-    document.getElementById('statPaid').textContent  = paid.length;
+    const done   = orders.filter(o => o.status === 'done');
+    const total  = [...ready, ...done].reduce((s, o) => s + (o.amount || 0), 0);
+    document.getElementById('statTotal').textContent = total > 0 ? fmt(total) : '—';
+    document.getElementById('statPaid').textContent  = done.length;
   }
 
   function setProgress(pct) {
